@@ -1,0 +1,152 @@
+---
+title: "PEC 1 Análisis de datos ómicos"
+author: "Naiara Azcue González"
+output: pdf_document
+---
+
+```{r}
+# Se presenta el código utilizado para el análisis del archivo 'human_cachexia.csv' para la PEC 1 de la asignatura 'Análisis # de datos ómicos'.
+
+library(SummarizedExperiment)
+library(tidyverse)
+library(readr)
+library(FactoMineR)
+library(factoextra)
+library(mixOmics)
+library(pheatmap)
+
+# Cargamos el dataset.
+archivo <- "human_cachexia.csv"
+datos_crudos <- read.csv(archivo, check.names = FALSE)
+
+# Renombramos las columnas para que sea más fácil de entender y de analizar.
+colnames(datos_crudos)[1:2] <- c("ID", "Group")
+
+# Verificamos los grupos.
+print(table(datos_crudos$Group))  # Esto debería mostrar "control" y "cachexic"
+
+# Se crea ColData.
+col_data <- datos_crudos[, c("ID", "Group")]
+rownames(col_data) <- col_data$ID
+col_data <- col_data[, "Group", drop = FALSE]
+
+# Se crea una matriz de datos que permita el análisis de los metabolitos, solo con las variables numéricas.
+datos_metabolitos <- datos_crudos[, -(1:2)]
+matriz_datos <- as.matrix(datos_metabolitos)
+rownames(matriz_datos) <- datos_crudos$ID
+
+# Se crea rowData con los datos de los metabolitos.
+row_data <- DataFrame(Metabolito = colnames(matriz_datos))
+
+
+#Análisis exploratorio de los datos
+# Resumen estadístico general de intensidades de metabolitos
+summary(as.data.frame(t(assay(se))))
+
+# Distribución de muestras por grupo
+table(colData(se)$Group)
+
+# Creamos el objeto 'SummarizedExperiment', que permite integrar en un solo objeto la matriz de expresión de metabolitos, la #información asociada a cada muestra (control o caquéxico) y los metadatos (metabolitos). 
+se <- SummarizedExperiment(
+  assays = list(intensidad = t(matriz_datos)),
+  rowData = row_data,
+  colData = col_data
+)
+
+# Se verifican los datos.
+table(colData(se)$Group)
+
+
+# Hacemos una limpieza de las etiquetas del grupo para evitar errores por diferencias como mayúsculas o espacios.
+colData(se)$Group <- trimws(tolower(colData(se)$Group))
+
+# Seleccionamos las muestras válidas.
+muestras_validas <- colnames(se)[!is.na(colData(se)$Group)]
+
+# Y ahora filtramos el SummarizedExperiment solo con las muestras válidas
+se <- se[, muestras_validas]
+
+# Extraemos la matriz de expresión del objeto, transponemos para tener las muestras en filas y los datos de los metabolitos #en columnas, ya que es necesario para el análisis. Aplicamos un escalado estándar o normalización, en este caso de media=0 #y desviación típica=1. De esta forma, evitamos el efecto de diferencias de escala entre los datos, en este caso metabolitos.
+matriz <- assay(se)
+matriz <- assay(se)
+datos_escalados <- scale(t(matriz))
+
+# Creamos el vector de grupos alineado
+grupos <- as.factor(colData(se)$Group)
+
+# Verificamos que los datos sean correctos y las trasnformaciones sean adecuadas.
+cat("Número de muestras (filas datos_escalados):", nrow(datos_escalados), "\n")
+cat("Longitud grupos:", length(grupos), "\n")
+cat("Grupos:\n")
+print(table(grupos))
+
+library(tidyverse)
+
+df_completo <- as.data.frame(datos_escalados)
+df_completo$Grupo <- grupos
+df_completo$Muestra <- rownames(datos_escalados)
+
+df_largo <- pivot_longer(df_completo,
+                         cols = -c(Muestra, Grupo),
+                         names_to = "Metabolito",
+                         values_to = "Valor_Z")
+
+# Generamos boxplots para los metabolitos segun los grupos, en puntuaciones z que permiten una mejor interpretación.
+ggplot(df_largo, aes(x = Grupo, y = Valor_Z, fill = Grupo)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.8) +
+  facet_wrap(~Metabolito, scales = "free_y") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        strip.text = element_text(size = 4)) +
+  labs(title = "Distribución",
+       x = "Grupo", y = " Puntuaciones z")
+
+# Realizamos un Análisis de Componentes Principales (PCA) sobre la matriz escalada. Esto permite explorar agrupamientos #entre muestras en función de las diferentes intensidades o niveles de metabolitos.
+pca_result <- prcomp(datos_escalados)
+
+# Hacemos un gráfico de las muestras definido por ID y Grupos. Cada punto representa un sujeto coloreada según su grupo. De #etsa forma, podemos observar agrupamientos y tendencias en los perfiles metabólicos según las condiciones de los sujetos.
+plot(pca_result$x[, 1:2],
+     col = as.numeric(grupos),
+     pch = 19,
+     main = "Componentes principales",
+     xlab = "Componente principal 1", ylab = "Componente principal 2")
+
+# Aplicamos un análisis PLS-DA (Partial Least Squares Discriminant Analysis). Se trata de una técnica supervisada que #permite maximizar la separación entre grupos a partir de los perfiles observados en los datos, ene este caso metabolómicos. 
+plsda_result <- plsda(datos_escalados, grupos, ncomp = 2)
+
+# Generamos el gráfico.
+plotIndiv(plsda_result,
+          comp = c(1, 2),
+          group = grupos,
+          ellipse = TRUE,
+          legend = TRUE,
+          title = "PLS-DA según grupo")
+
+# Obtenemos los VIP (Variable Importance in Projection) scores del modelo PLS-DA, que indican qué metabolitos contribuyen #más a la separación entre los grupos. Seleccionamos los 10 metabolitos más relevantes para visualizarlos posteriormente. 
+top_vip_idx <- head(order(vip_scores[, 1], decreasing = TRUE), 10)
+top_metabolitos <- colnames(datos_escalados)[top_vip_idx]
+
+# Mostramos los nombres de los 10 metabolitos más importantes
+top_metabolitos
+
+# Creamos la anotación por columna
+annotation_col <- data.frame(Group = grupos)
+rownames(annotation_col) <- rownames(datos_escalados)  # Aseguramos que los nombres sean correctos
+
+# Definimos los colores para los grupos
+grupo_niveles <- levels(grupos)
+colores_grupo <- setNames(
+  RColorBrewer::brewer.pal(n = length(grupo_niveles), name = "Set1")[1:length(grupo_niveles)],
+  grupo_niveles
+)
+annotation_colors <- list(Group = colores_grupo)
+# Finalmente, generamos el heatmap o mapa de color de los metabolitos
+pheatmap(t(datos_escalados[, top_metabolitos]),
+         annotation_col = annotation_col,
+         annotation_colors = annotation_colors,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         show_rownames = FALSE,
+         main = "Heatmap metabolitos VIP")
+```
