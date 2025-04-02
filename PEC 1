@@ -1,4 +1,5 @@
-# Se presenta el código utilizado para el análisis del archivo 'human_cachexia.csv' para la PEC 1 de la asignatura 'Análisis de datos ómicos'.
+```{r}
+# Se presenta el código utilizado para el análisis del archivo 'human_cachexia.csv' para la PEC 1 de la asignatura 'Análisis # de datos ómicos'.
 
 library(SummarizedExperiment)
 library(tidyverse)
@@ -7,7 +8,6 @@ library(FactoMineR)
 library(factoextra)
 library(mixOmics)
 library(pheatmap)
-
 
 # Cargamos el dataset.
 archivo <- "human_cachexia.csv"
@@ -32,7 +32,7 @@ rownames(matriz_datos) <- datos_crudos$ID
 # Se crea rowData con los datos de los metabolitos.
 row_data <- DataFrame(Metabolito = colnames(matriz_datos))
 
-# Creamos el objeto 'SummarizedExperiment', que permite integrar en un solo objeto la matriz de expresión de metabolitos, la información asociada a cada muestra (control o caquéxico) y los metadatos (metabolitos). 
+# Creamos el objeto 'SummarizedExperiment', que permite integrar en un solo objeto la matriz de expresión de metabolitos, la #información asociada a cada muestra (control o caquéxico) y los metadatos (metabolitos). 
 se <- SummarizedExperiment(
   assays = list(intensidad = t(matriz_datos)),
   rowData = row_data,
@@ -52,7 +52,7 @@ muestras_validas <- colnames(se)[!is.na(colData(se)$Group)]
 # Y ahora filtramos el SummarizedExperiment solo con las muestras válidas
 se <- se[, muestras_validas]
 
-# Extraemos la matriz de expresión del objeto, transponemos para tener las muestras en filas y los datos de los metabolitos en columnas, ya que es necesario para el análisis. Aplicamos un escalado estándar o normalización, en este caso de media=0 y desviación típica=1. De esta forma, evitamos el efecto de diferencias de escala entre los datos, en este caso metabolitos.
+# Extraemos la matriz de expresión del objeto, transponemos para tener las muestras en filas y los datos de los metabolitos #en columnas, ya que es necesario para el análisis. Aplicamos un escalado estándar o normalización, en este caso de media=0 #y desviación típica=1. De esta forma, evitamos el efecto de diferencias de escala entre los datos, en este caso metabolitos.
 matriz <- assay(se)
 matriz <- assay(se)
 datos_escalados <- scale(t(matriz))
@@ -66,17 +66,17 @@ cat("Longitud grupos:", length(grupos), "\n")
 cat("Grupos:\n")
 print(table(grupos))
 
-# Realizamos un Análisis de Componentes Principales (PCA) sobre la matriz escalada. Esto permite explorar agrupamientos entre muestras en función de las diferentes intensidades o niveles de metabolitos.
+# Realizamos un Análisis de Componentes Principales (PCA) sobre la matriz escalada. Esto permite explorar agrupamientos #entre muestras en función de las diferentes intensidades o niveles de metabolitos.
 pca_result <- prcomp(datos_escalados)
 
-# Hacemos un gráfico de las muestras definido por ID y Grupos. Cada punto representa un sujeto coloreada según su grupo. De etsa forma, podemos observar agrupamientos y tendencias en los perfiles metabólicos según las condiciones de los sujetos.
+# Hacemos un gráfico de las muestras definido por ID y Grupos. Cada punto representa un sujeto coloreada según su grupo. De #etsa forma, podemos observar agrupamientos y tendencias en los perfiles metabólicos según las condiciones de los sujetos.
 plot(pca_result$x[, 1:2],
      col = as.numeric(grupos),
      pch = 19,
      main = "Componentes principales",
      xlab = "Componente principal 1", ylab = "Componente principal 2")
 
-# Aplicamos un análisis PLS-DA (Partial Least Squares Discriminant Analysis). Se trata de una técnica supervisada que permite maximizar la separación entre grupos a partir de los perfiles observados en los datos, ene este caso metabolómicos. 
+# Aplicamos un análisis PLS-DA (Partial Least Squares Discriminant Analysis). Se trata de una técnica supervisada que #permite maximizar la separación entre grupos a partir de los perfiles observados en los datos, ene este caso metabolómicos. 
 plsda_result <- plsda(datos_escalados, grupos, ncomp = 2)
 
 # Generamos el gráfico.
@@ -87,7 +87,7 @@ plotIndiv(plsda_result,
           legend = TRUE,
           title = "PLS-DA según grupo")
 
-# Obtenemos los VIP (Variable Importance in Projection) scores del modelo PLS-DA, que indican qué metabolitos contribuyen más a la separación entre los grupos. Seleccionamos los 10 metabolitos más relevantes para visualizarlos posteriormente. 
+# Obtenemos los VIP (Variable Importance in Projection) scores del modelo PLS-DA, que indican qué metabolitos contribuyen #más a la separación entre los grupos. Seleccionamos los 10 metabolitos más relevantes para visualizarlos posteriormente. 
 top_vip_idx <- head(order(vip_scores[, 1], decreasing = TRUE), 10)
 top_metabolitos <- colnames(datos_escalados)[top_vip_idx]
 
@@ -102,9 +102,7 @@ colores_grupo <- setNames(
   RColorBrewer::brewer.pal(n = length(grupo_niveles), name = "Set1")[1:length(grupo_niveles)],
   grupo_niveles
 )
-
 annotation_colors <- list(Group = colores_grupo)
-
 # Finalmente, generamos el heatmap o mapa de color de los metabolitos
 pheatmap(t(datos_escalados[, top_metabolitos]),
          annotation_col = annotation_col,
@@ -113,3 +111,4 @@ pheatmap(t(datos_escalados[, top_metabolitos]),
          cluster_cols = TRUE,
          show_rownames = FALSE,
          main = "Heatmap metabolitos VIP")
+```
